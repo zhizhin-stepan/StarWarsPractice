@@ -1,10 +1,11 @@
 package com.zhizhin.starwarspractice.presentation
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -16,12 +17,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
-import com.zhizhin.starwarspractice.domain.StarWarsCharacter
+import com.zhizhin.starwarspractice.domain.model.Character
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterDetailsScreen(
-    character: StarWarsCharacter,
+    character: Character,
     onBackClick: () -> Unit
 ) {
     Scaffold(
@@ -31,9 +32,7 @@ fun CharacterDetailsScreen(
                     Text("Информация о персонаже")
                 },
                 navigationIcon = {
-                    TextButton(
-                        onClick = onBackClick
-                    ) {
+                    TextButton(onClick = onBackClick) {
                         Text("Назад")
                     }
                 }
@@ -73,7 +72,7 @@ fun CharacterDetailsScreen(
                         end.linkTo(parent.end)
                     }
             ) {
-                androidx.compose.foundation.layout.Column(
+                Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
@@ -97,7 +96,7 @@ fun CharacterDetailsScreen(
                         end.linkTo(parent.end)
                     }
             ) {
-                androidx.compose.foundation.layout.Column(
+                Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
@@ -121,7 +120,7 @@ fun CharacterDetailsScreen(
                         bottom.linkTo(parent.bottom)
                     }
             ) {
-                androidx.compose.foundation.layout.Column(
+                Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(

@@ -6,6 +6,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -16,8 +17,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.zhizhin.starwarspractice.presentation.CharacterDetailsScreen
 import com.zhizhin.starwarspractice.presentation.CharactersListScreen
-import com.zhizhin.starwarspractice.presentation.CharactersViewModel
 import com.zhizhin.starwarspractice.presentation.PlaceholderScreen
+import com.zhizhin.starwarspractice.presentation.characters.CharactersViewModel
+import com.zhizhin.starwarspractice.presentation.characters.CharactersViewModelFactory
 
 private const val CHARACTERS_ROUTE = "characters"
 private const val FAVORITES_ROUTE = "favorites"
@@ -27,10 +29,15 @@ private const val DETAILS_ROUTE = "details/{characterId}"
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    val viewModel: CharactersViewModel = viewModel()
+    val viewModel: CharactersViewModel = viewModel(
+        factory = CharactersViewModelFactory()
+    )
+
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         bottomBar = {
@@ -39,57 +46,51 @@ fun AppNavigation() {
                     selected = currentRoute == CHARACTERS_ROUTE,
                     onClick = {
                         navController.navigate(CHARACTERS_ROUTE) {
-                            popUpTo(navController.graph.findStartDestination().id) {
+                            popUpTo(
+                                navController.graph.findStartDestination().id
+                            ) {
                                 saveState = true
                             }
                             launchSingleTop = true
                             restoreState = true
                         }
                     },
-                    icon = {
-                        Text("★")
-                    },
-                    label = {
-                        Text("Персонажи")
-                    }
+                    icon = { Text("★") },
+                    label = { Text("Персонажи") }
                 )
 
                 NavigationBarItem(
                     selected = currentRoute == FAVORITES_ROUTE,
                     onClick = {
                         navController.navigate(FAVORITES_ROUTE) {
-                            popUpTo(navController.graph.findStartDestination().id) {
+                            popUpTo(
+                                navController.graph.findStartDestination().id
+                            ) {
                                 saveState = true
                             }
                             launchSingleTop = true
                             restoreState = true
                         }
                     },
-                    icon = {
-                        Text("☆")
-                    },
-                    label = {
-                        Text("Избранное")
-                    }
+                    icon = { Text("☆") },
+                    label = { Text("Избранное") }
                 )
 
                 NavigationBarItem(
                     selected = currentRoute == SETTINGS_ROUTE,
                     onClick = {
                         navController.navigate(SETTINGS_ROUTE) {
-                            popUpTo(navController.graph.findStartDestination().id) {
+                            popUpTo(
+                                navController.graph.findStartDestination().id
+                            ) {
                                 saveState = true
                             }
                             launchSingleTop = true
                             restoreState = true
                         }
                     },
-                    icon = {
-                        Text("⚙")
-                    },
-                    label = {
-                        Text("Настройки")
-                    }
+                    icon = { Text("⚙") },
+                    label = { Text("Настройки") }
                 )
             }
         }
@@ -122,13 +123,14 @@ fun AppNavigation() {
                 )
             }
 
-            composable(DETAILS_ROUTE) { backStackEntry ->
-                val characterId = backStackEntry.arguments
+            composable(DETAILS_ROUTE) { entry ->
+                val characterId = entry.arguments
                     ?.getString("characterId")
                     ?.toIntOrNull()
 
-                val character = viewModel.characters.value
-                    .firstOrNull { it.id == characterId }
+                val character = uiState.characters.firstOrNull {
+                    it.id == characterId
+                }
 
                 if (character != null) {
                     CharacterDetailsScreen(
@@ -137,6 +139,10 @@ fun AppNavigation() {
                             navController.popBackStack()
                         }
                     )
+                } else if (uiState.isLoading) {
+                    Text("Загрузка информации о персонаже...")
+                } else {
+                    Text("Персонаж не найден")
                 }
             }
         }
