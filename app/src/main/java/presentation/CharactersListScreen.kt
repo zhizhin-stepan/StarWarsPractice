@@ -3,116 +3,129 @@ package com.zhizhin.starwarspractice.presentation
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.zhizhin.starwarspractice.domain.model.Character
 import com.zhizhin.starwarspractice.presentation.characters.CharactersViewModel
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharactersListScreen(
+    viewModel: CharactersViewModel,
     onCharacterClick: (Int) -> Unit,
-    viewModel: CharactersViewModel
+    favoriteIds: Set<Int> = emptySet(),
+    onFavoriteClick: (Character) -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text("Персонажи Star Wars")
-                }
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+    var searchText by remember {
+        mutableStateOf("")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Персонажи Star Wars",
+            style = MaterialTheme.typography.headlineSmall
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (uiState.isLoading) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator()
-                    Text(
-                        text = "Загрузка персонажей...",
-                        modifier = Modifier.padding(start = 12.dp)
-                    )
-                }
-            }
-
-            if (uiState.error != null) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = uiState.error.orEmpty(),
-                        color = MaterialTheme.colorScheme.error
-                    )
-
-                    Button(
-                        onClick = { viewModel.retry() },
-                        modifier = Modifier.padding(top = 8.dp)
-                    ) {
-                        Text("Повторить")
-                    }
-                }
-            }
-
-            if (!uiState.isLoading &&
-                uiState.error == null &&
-                uiState.characters.isEmpty()
-            ) {
-                Text(
-                    text = "Персонажи не найдены",
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-
-            LazyColumn(
+            OutlinedTextField(
+                value = searchText,
+                onValueChange = { searchText = it },
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                label = { Text("Имя персонажа") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        viewModel.searchCharacters(searchText)
+                    }
+                )
+            )
+
+            Button(
+                onClick = {
+                    viewModel.searchCharacters(searchText)
+                },
+                modifier = Modifier.padding(start = 8.dp)
             ) {
-                items(
-                    items = uiState.characters,
-                    key = { it.id }
-                ) { character ->
-                    CharacterItem(
-                        character = character,
-                        onClick = {
-                            onCharacterClick(character.id)
-                        }
-                    )
+                Text("Найти")
+            }
+        }
+
+        Spacer(modifier = Modifier.padding(4.dp))
+
+        when {
+            state.isLoading -> {
+                CircularProgressIndicator()
+            }
+
+            state.error != null -> {
+                Text(
+                    text = state.error!!,
+                    color = MaterialTheme.colorScheme.error
+                )
+
+                Button(onClick = viewModel::retry) {
+                    Text("Повторить")
+                }
+            }
+
+            state.characters.isEmpty() -> {
+                Text("Персонажи не найдены.")
+            }
+
+            else -> {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(
+                        items = state.characters,
+                        key = { it.id }
+                    ) { character ->
+                        CharacterCard(
+                            character = character,
+                            isFavorite = character.id in favoriteIds,
+                            onClick = {
+                                onCharacterClick(character.id)
+                            },
+                            onFavoriteClick = {
+                                onFavoriteClick(character)
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -120,41 +133,38 @@ fun CharactersListScreen(
 }
 
 @Composable
-private fun CharacterItem(
+private fun CharacterCard(
     character: Character,
-    onClick: () -> Unit
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    onFavoriteClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CharacterImage(
-                characterId = character.id,
-                characterName = character.name,
-                modifier = Modifier
-                    .width(100.dp)
-                    .height(120.dp)
-            )
-
             Column(
                 modifier = Modifier
-                    .padding(start = 16.dp)
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .weight(1f)
+                    .clickable(onClick = onClick)
+                    .padding(end = 8.dp)
             ) {
                 Text(
                     text = character.name,
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleMedium
                 )
 
                 Text("Рост: ${character.height} см")
-                Text("Вес: ${character.mass} кг")
-                Text("Год рождения: ${character.birthYear}")
+                Text("Пол: ${character.gender}")
+            }
+
+            OutlinedButton(onClick = onFavoriteClick) {
+                Text(if (isFavorite) "★" else "☆")
             }
         }
     }

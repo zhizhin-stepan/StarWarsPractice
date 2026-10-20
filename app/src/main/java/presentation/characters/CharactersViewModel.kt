@@ -2,6 +2,8 @@ package com.zhizhin.starwarspractice.presentation.characters
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zhizhin.starwarspractice.domain.model.Character
+import com.zhizhin.starwarspractice.domain.model.FilterSettings
 import com.zhizhin.starwarspractice.domain.usecase.GetCharactersUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +20,8 @@ class CharactersViewModel(
 
     private var currentPage = 1
     private var currentSearch = ""
+    private var filterSettings = FilterSettings()
+    private var loadedCharacters: List<Character> = emptyList()
 
     init {
         loadCharacters()
@@ -34,18 +38,20 @@ class CharactersViewModel(
             )
 
             try {
+                val effectiveSearch = search.ifBlank {
+                    filterSettings.name.trim()
+                }
+
                 val characters = getCharactersUseCase(
                     page = page,
-                    search = search
+                    search = effectiveSearch
                 )
 
                 currentPage = page
                 currentSearch = search
+                loadedCharacters = characters
 
-                _uiState.value = CharactersUiState(
-                    characters = characters,
-                    isLoading = false
-                )
+                updateFilteredCharacters()
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
@@ -55,6 +61,53 @@ class CharactersViewModel(
                 )
             }
         }
+    }
+
+    fun setFilterSettings(settings: FilterSettings) {
+        val previousSettings = filterSettings
+        filterSettings = settings
+
+        if (previousSettings.name.trim() != settings.name.trim()) {
+            loadCharacters(page = 1, search = "")
+        } else {
+            updateFilteredCharacters()
+        }
+    }
+
+    private fun updateFilteredCharacters() {
+        val settings = filterSettings
+
+        val filtered = loadedCharacters.filter { character ->
+            val matchesName = settings.name.isBlank() ||
+                    character.name.contains(
+                        settings.name.trim(),
+                        ignoreCase = true
+                    )
+
+            val matchesGender = settings.gender == "ALL" ||
+                    character.gender.equals(
+                        settings.gender,
+                        ignoreCase = true
+                    ) ||
+                    (
+                            settings.gender == "other" &&
+                                    !character.gender.equals("male", ignoreCase = true) &&
+                                    !character.gender.equals("female", ignoreCase = true)
+                            )
+
+            val characterHeight = character.height.toIntOrNull()
+            val matchesHeight = settings.minHeight <= 0 ||
+                    (characterHeight != null &&
+                            characterHeight >= settings.minHeight)
+
+            matchesName && matchesGender && matchesHeight
+        }
+
+        _uiState.value = _uiState.value.copy(
+            characters = filtered,
+            isLoading = false,
+            error = null
+        )
     }
 
     fun searchCharacters(query: String) {

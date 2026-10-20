@@ -1,13 +1,17 @@
 package navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -15,11 +19,19 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.zhizhin.starwarspractice.domain.model.Character
+import com.zhizhin.starwarspractice.domain.repository.FavoriteRepository
+import com.zhizhin.starwarspractice.domain.repository.FilterSettingsRepository
 import com.zhizhin.starwarspractice.presentation.CharacterDetailsScreen
 import com.zhizhin.starwarspractice.presentation.CharactersListScreen
-import com.zhizhin.starwarspractice.presentation.PlaceholderScreen
+import com.zhizhin.starwarspractice.presentation.favorites.FavoritesScreen
+import com.zhizhin.starwarspractice.presentation.favorites.FavoritesViewModel
+import com.zhizhin.starwarspractice.presentation.favorites.FavoritesViewModelFactory
 import com.zhizhin.starwarspractice.presentation.characters.CharactersViewModel
 import com.zhizhin.starwarspractice.presentation.characters.CharactersViewModelFactory
+import com.zhizhin.starwarspractice.presentation.settings.FilterBadgeCache
+import com.zhizhin.starwarspractice.presentation.settings.FilterSettingsScreen
+import org.koin.java.KoinJavaComponent
 
 private const val CHARACTERS_ROUTE = "characters"
 private const val FAVORITES_ROUTE = "favorites"
@@ -33,11 +45,45 @@ fun AppNavigation() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    val viewModel: CharactersViewModel = viewModel(
+    val charactersViewModel: CharactersViewModel = viewModel(
         factory = CharactersViewModelFactory()
     )
 
-    val uiState by viewModel.uiState.collectAsState()
+    val charactersState by charactersViewModel.uiState.collectAsState()
+
+    val favoriteRepository: FavoriteRepository = remember {
+        KoinJavaComponent.get(FavoriteRepository::class.java)
+    }
+
+    val favoritesViewModel: FavoritesViewModel = viewModel(
+        factory = remember(favoriteRepository) {
+            FavoritesViewModelFactory(favoriteRepository)
+        }
+    )
+
+    val favoritesState by favoritesViewModel.uiState.collectAsState()
+    val favoriteIds by favoritesViewModel.favoriteIds.collectAsState()
+
+    val settingsRepository: FilterSettingsRepository = remember {
+        KoinJavaComponent.get(FilterSettingsRepository::class.java)
+    }
+
+    val filterSettings by settingsRepository.settings.collectAsState(
+        initial = null
+    )
+
+    val badgeCache: FilterBadgeCache = remember {
+        KoinJavaComponent.get(FilterBadgeCache::class.java)
+    }
+
+    val showFilterBadge by badgeCache.shouldShowBadge.collectAsState()
+
+    LaunchedEffect(filterSettings) {
+        filterSettings?.let { settings ->
+            charactersViewModel.setFilterSettings(settings)
+            badgeCache.update(settings)
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -55,8 +101,12 @@ fun AppNavigation() {
                             restoreState = true
                         }
                     },
-                    icon = { Text("★") },
-                    label = { Text("Персонажи") }
+                    icon = {
+                        Text("★")
+                    },
+                    label = {
+                        Text("Персонажи")
+                    }
                 )
 
                 NavigationBarItem(
@@ -72,8 +122,12 @@ fun AppNavigation() {
                             restoreState = true
                         }
                     },
-                    icon = { Text("☆") },
-                    label = { Text("Избранное") }
+                    icon = {
+                        Text("☆")
+                    },
+                    label = {
+                        Text("Избранное")
+                    }
                 )
 
                 NavigationBarItem(
@@ -89,8 +143,20 @@ fun AppNavigation() {
                             restoreState = true
                         }
                     },
-                    icon = { Text("⚙") },
-                    label = { Text("Настройки") }
+                    icon = {
+                        BadgedBox(
+                            badge = {
+                                if (showFilterBadge) {
+                                    Badge()
+                                }
+                            }
+                        ) {
+                            Text("⚙")
+                        }
+                    },
+                    label = {
+                        Text("Настройки")
+                    }
                 )
             }
         }
@@ -102,7 +168,9 @@ fun AppNavigation() {
         ) {
             composable(CHARACTERS_ROUTE) {
                 CharactersListScreen(
-                    viewModel = viewModel,
+                    viewModel = charactersViewModel,
+                    favoriteIds = favoriteIds,
+                    onFavoriteClick = favoritesViewModel::toggleFavorite,
                     onCharacterClick = { characterId ->
                         navController.navigate("details/$characterId")
                     }
@@ -110,16 +178,21 @@ fun AppNavigation() {
             }
 
             composable(FAVORITES_ROUTE) {
-                PlaceholderScreen(
-                    title = "Избранное",
-                    description = "Раздел будет реализован позже"
+                FavoritesScreen(
+                    viewModel = favoritesViewModel,
+                    onCharacterClick = { characterId ->
+                        navController.navigate("details/$characterId")
+                    }
                 )
             }
 
             composable(SETTINGS_ROUTE) {
-                PlaceholderScreen(
-                    title = "Настройки",
-                    description = "Раздел будет реализован позже"
+                FilterSettingsScreen(
+                    onDone = {
+                        navController.navigate(CHARACTERS_ROUTE) {
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
 
@@ -128,18 +201,28 @@ fun AppNavigation() {
                     ?.getString("characterId")
                     ?.toIntOrNull()
 
-                val character = uiState.characters.firstOrNull {
-                    it.id == characterId
-                }
+                val character: Character? =
+                    charactersState.characters.firstOrNull {
+                        it.id == characterId
+                    } ?: favoritesState.characters.firstOrNull {
+                        it.id == characterId
+                    }
 
                 if (character != null) {
                     CharacterDetailsScreen(
                         character = character,
+                        isFavorite = character.id in favoriteIds,
+                        onFavoriteClick = {
+                            favoritesViewModel.toggleFavorite(character)
+                        },
                         onBackClick = {
                             navController.popBackStack()
                         }
                     )
-                } else if (uiState.isLoading) {
+                } else if (
+                    charactersState.isLoading ||
+                    favoritesState.isLoading
+                ) {
                     Text("Загрузка информации о персонаже...")
                 } else {
                     Text("Персонаж не найден")
